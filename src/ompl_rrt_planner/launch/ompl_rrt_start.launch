@@ -1,0 +1,9 @@
+<launch>
+  <!-- 发布静态变换 -->
+  <node pkg="tf2_ros" type="static_transform_publisher" name="static_transform_publisher" args="0 0 0 0 0 0 1 torso map" />
+
+  <!-- 启动RRT规划器节点 -->
+  <node name="rrt_planner" pkg="ompl_rrt_planner" type="rrt_planner" output="screen">
+    <!-- 这里可以添加您需要的参数 -->
+  </node>
+</launch>
