@@ -12,6 +12,10 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <fcl/fcl.h>
 
+// 添加B样条曲线优化头文件
+#include <ompl/base/objectives/PathLengthOptimizationObjective.h>
+#include <ompl/geometric/PathGeometric.h>
+
 namespace ob = ompl::base;
 namespace og = ompl::geometric;
 
