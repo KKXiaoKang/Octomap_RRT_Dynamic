@@ -25,6 +25,7 @@ public:
         octomap_sub_ = nh_.subscribe("/octomap_full", 1, &RRTPlanner::octomapCallback, this);
         goal_sub_ = nh_.subscribe("/goal", 1, &RRTPlanner::goalCallback, this);
         path_pub_ = nh_.advertise<nav_msgs::Path>("planned_path", 1);
+        smooth_pub_ = nh_.advertise<nav_msgs::Path>("smooth_planned_path", 1);
 
         // Initialize OMPL
         space_ = ob::StateSpacePtr(new ob::SE3StateSpace());
@@ -148,10 +149,17 @@ public:
         ob::PlannerStatus solved = ss_->solve(1.0);
 
         if (solved) {
+            // 寻求到解
             ROS_INFO("Found solution!");
             og::PathGeometric path = ss_->getSolutionPath();
             path.interpolate();
+            
+            // B样条曲线优化轨迹
+            og::PathSimplifier path_simplifier(ss_->getSpaceInformation());
+            og::PathGeometric smoothed_path = path;
+            path_simplifier.smoothBSpline(smoothed_path, 3);  // 3 is the smoothing parameter             
 
+            // 发布原始path信息 
             nav_msgs::Path path_msg;
             path_msg.header.frame_id = "map";
             path_msg.header.stamp = ros::Time::now();
@@ -171,6 +179,28 @@ public:
                 path_msg.poses.push_back(pose_stamped);
             }
             path_pub_.publish(path_msg);
+
+            // 发布smoothed_path信息
+            nav_msgs::Path smoothed_path_msg;
+            smoothed_path_msg.header.frame_id = "map";
+            smoothed_path_msg.header.stamp = ros::Time::now();
+
+            for (std::size_t i = 0; i < smoothed_path.getStateCount(); ++i) {
+                const auto *smoothed_state = smoothed_path.getState(i)->as<ob::SE3StateSpace::StateType>();
+                geometry_msgs::PoseStamped smoothed_pose_stamped;
+                smoothed_pose_stamped.header.frame_id = "map";
+                smoothed_pose_stamped.header.stamp = ros::Time::now();
+                smoothed_pose_stamped.pose.position.x = smoothed_state->getX();
+                smoothed_pose_stamped.pose.position.y = smoothed_state->getY();
+                smoothed_pose_stamped.pose.position.z = smoothed_state->getZ();
+                smoothed_pose_stamped.pose.orientation.w = smoothed_state->rotation().w;
+                smoothed_pose_stamped.pose.orientation.x = smoothed_state->rotation().x;
+                smoothed_pose_stamped.pose.orientation.y = smoothed_state->rotation().y;
+                smoothed_pose_stamped.pose.orientation.z = smoothed_state->rotation().z;
+                smoothed_path_msg.poses.push_back(smoothed_pose_stamped);
+            }
+            smooth_pub_.publish(smoothed_path_msg);
+
         } else {
             ROS_WARN("No solution found");
         }
@@ -181,6 +211,7 @@ private:
     ros::Subscriber octomap_sub_;
     ros::Subscriber goal_sub_;
     ros::Publisher path_pub_;
+    ros::Publisher smooth_pub_; // B样条优化轨迹
     tf2_ros::Buffer tf_buffer_;
     tf2_ros::TransformListener tf_listener_;
 
